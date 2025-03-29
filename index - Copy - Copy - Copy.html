@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>كورسات يوتيوب</title>
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
+    <style>
+        body {
+            user-select: none;
+        }
+        iframe {
+            pointer-events: none;
+        }
+        .error-message {
+            text-align: center;
+            color: red;
+            font-size: 18px;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+<h2>📚 قائمة الكورسات</h2>
+<div id="videos"></div>
+
+<script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+<script>
+    // Device detection functions
+    function isAndroid() {
+        return /Android/i.test(navigator.userAgent) || 
+               /Linux.*Mobile/i.test(navigator.userAgent);
+    }
+
+    function checkPlatform() {
+        // Multiple checks for device type
+        const checks = {
+            userAgent: /Android/i.test(navigator.userAgent),
+            platform: /Linux.*Mobile/i.test(navigator.platform),
+            vendor: navigator.vendor?.includes('Android') || false,
+            maxTouchPoints: navigator.maxTouchPoints > 1
+        };
+
+        // Must pass at least 2 checks to be considered Android
+        return Object.values(checks).filter(Boolean).length >= 2;
+    }
+
+    // Advanced emulator detection
+    function detectEmulator() {
+        const signs = {
+            // Check for common emulator signs
+            battery: 'getBattery' in navigator,
+            performance: window.performance.now() > 0,
+            hardwareConcurrency: navigator.hardwareConcurrency > 1,
+            // Emulators often have these properties different
+            screen: window.screen.width < 1920 && window.screen.height < 1080,
+            timing: performance.timing.navigationStart > 0,
+            // Check sensors availability
+            sensors: 'DeviceMotionEvent' in window && 'DeviceOrientationEvent' in window
+        };
+
+        // Additional checks for emulator properties
+        const suspiciousProps = [
+            'BlueStacks',
+            'NoxPlayer',
+            'MEmu',
+            'AndY',
+            'Genymotion'
+        ];
+
+        const userAgentCheck = !suspiciousProps.some(prop => 
+            navigator.userAgent.includes(prop) || 
+            navigator.appVersion.includes(prop)
+        );
+
+        // Check device memory and hardware
+        const deviceChecks = {
+            memory: navigator.deviceMemory > 1,
+            cores: navigator.hardwareConcurrency >= 2,
+            connection: 'connection' in navigator
+        };
+
+        // Calculate probability of being a real device
+        const validChecks = [
+            ...Object.values(signs),
+            userAgentCheck,
+            ...Object.values(deviceChecks)
+        ].filter(Boolean).length;
+
+        return validChecks < 8; // If less than 8 checks pass, likely an emulator
+    }
+
+    // Chrome browser detection
+    function isChrome() {
+        const chromeChecks = {
+            vendor: navigator.vendor.includes('Google'),
+            userAgent: /chrome|chromium/i.test(navigator.userAgent),
+            chrome: 'chrome' in window,
+            permissions: 'permissions' in navigator,
+            presentation: 'presentation' in navigator,
+            webkitHidden: 'webkitHidden' in document,
+        };
+
+        // Check Chrome-specific APIs
+        const chromeAPIs = [
+            'webkitRequestFileSystem',
+            'webkitResolveLocalFileSystemURL',
+            'chrome'
+        ].filter(api => api in window);
+
+        return Object.values(chromeChecks).filter(Boolean).length >= 4 && chromeAPIs.length >= 2;
+    }
+
+    async function fetchVideos() {
+        if (!isAndroid() || !checkPlatform() || detectEmulator() || !isChrome()) {
+            document.getElementById("videos").innerHTML = `
+                <div class="error-message">
+                    عذراً، هذا المحتوى متاح فقط على متصفح كروم في أجهزة الأندرويد
+                </div>`;
+            return;
+        }
+
+        try {
+            // Additional Chrome verification
+            const chromeVersion = parseInt((navigator.userAgent.match(/Chrome\/([0-9]+)/) || [])[1]);
+            const isValidChrome = chromeVersion && chromeVersion >= 80;
+            const isMobileChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+
+            if (!isValidChrome || !isMobileChrome) {
+                throw new Error('Invalid browser');
+            }
+
+            const API_KEY = "AIzaSyBqoo9jygAP8JX8RIS-GshiLPE_E_bXWn8";
+            const CHANNEL_ID = "UCYTbaYd4Y0t3J9S4Ds1HggQ";
+
+            const response = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${API_KEY}&channelId=${CHANNEL_ID}&part=snippet,id&order=date&maxResults=5`);
+            const data = await response.json();
+
+            let html = "";
+            data.items.forEach(video => {
+                const videoId = video.id.videoId;
+                const title = video.snippet.title;
+
+                html += `
+                    <div>
+                        <h3>${title}</h3>
+                        <div class="plyr__video-embed">
+                            <iframe src="https://www.youtube.com/embed/${videoId}?origin=${location.origin}&rel=0&modestbranding=1&showinfo=0&enablejsapi=1" 
+                                    allowfullscreen 
+                                    allow="autoplay; encrypted-media">
+                            </iframe>
+                        </div>
+                    </div>
+                `;
+            });
+
+            document.getElementById("videos").innerHTML = html;
+            const players = Plyr.setup('.plyr__video-embed');
+        } catch (error) {
+            document.getElementById("videos").innerHTML = `
+                <div class="error-message">
+                    عذراً، يرجى استخدام متصفح كروم الرسمي على الأندرويد
+                </div>`;
+        }
+    }
+
+    // Prevent desktop browser spoofing
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 1200 || window.innerHeight > 1200) {
+            location.reload();
+        }
+    });
+
+    // Additional runtime checks
+    let checkCount = 0;
+    setInterval(() => {
+        if (detectEmulator() || checkCount > 5) {
+            location.reload();
+        }
+        checkCount++;
+    }, 30000);
+
+    setInterval(() => {
+        if (!isChrome()) {
+            location.reload();
+        }
+    }, 15000);
+
+    fetchVideos();
+</script>
+
+</body>
+</html>
